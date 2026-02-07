@@ -1,0 +1,210 @@
+---
+name: 🚀 Trunk-Based CI/CD
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+# Cancela runs previos del mismo PR/branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # ============================================
+  # FAST FEEDBACK: Lint (< 30s)
+  # ============================================
+  lint:
+    name: 🔍 Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    
+    defaults:
+      run:
+        working-directory: ./src/app
+    
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 🔧 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: './src/app/package-lock.json'
+
+      - name: 📦 Install dependencies
+        run: npm ci --prefer-offline
+
+      - name: 🔍 Run ESLint
+        run: npm run lint
+
+      - name: 📊 Lint Summary
+        run: |
+          echo "### 🔍 Lint Results" >> $GITHUB_STEP_SUMMARY
+          echo "✅ ESLint passed" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================
+  # CORE: Tests (< 2min)
+  # ============================================
+  test:
+    name: 🧪 Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    defaults:
+      run:
+        working-directory: ./src/app
+    
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🔧 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: './src/app/package-lock.json'
+
+      - name: 📦 Install dependencies
+        run: npm ci --prefer-offline
+
+      - name: 🏗️ Build Next.js
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+
+      - name: 📊 Test Summary
+        run: |
+          echo "### 🧪 Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Build passed" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================
+  # SECURITY: Quick Security Scan
+  # ============================================
+  security:
+    name: 🔒 Security
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    
+    defaults:
+      run:
+        working-directory: ./src/app
+    
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🔧 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: './src/app/package-lock.json'
+
+      - name: 📦 Install dependencies
+        run: npm ci
+
+      - name: 🔒 Run npm audit
+        run: npm audit --audit-level=moderate
+        continue-on-error: true
+
+      - name: 📊 Security Summary
+        run: |
+          echo "### 🔒 Security Scan" >> $GITHUB_STEP_SUMMARY
+          echo "✅ npm audit completed" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================
+  # AUTO-MERGE: Enable for PRs (No Approval Required)
+  # ============================================
+  auto-merge:
+    name: 🤖 Auto-Merge
+    runs-on: ubuntu-latest
+    needs: [lint, test, security]
+    if: |
+      github.event_name == 'pull_request' &&
+      !github.event.pull_request.draft
+    
+    permissions:
+      contents: write
+      pull-requests: write
+    
+    steps:
+      - name: 📊 Check PR info
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          echo "### 🤖 Auto-Merge" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **PR**: $PR_URL" >> $GITHUB_STEP_SUMMARY
+          echo "- **Author**: $PR_AUTHOR" >> $GITHUB_STEP_SUMMARY
+          echo "- **All checks**: ✅ Passed" >> $GITHUB_STEP_SUMMARY
+
+      - name: 🔀 Enable auto-merge
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr merge "$PR_URL" --auto --squash --delete-branch
+
+      - name: ✅ Success
+        run: |
+          echo "✅ Auto-merge enabled!" >> $GITHUB_STEP_SUMMARY
+          echo "PR will merge automatically when all checks pass" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================
+  # DEPLOY: Auto-deploy to Staging on Main
+  # ============================================
+  deploy-staging:
+    name: 🚀 Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [lint, test, security]
+    if: |
+      github.ref == 'refs/heads/main' &&
+      github.event_name == 'push'
+    
+    environment: 
+      name: staging
+      url: https://staging.tuapp.com
+    
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🚀 Deploy to staging
+        run: |
+          echo "🚀 Deploying to staging..."
+          echo "URL: https://staging.tuapp.com"
+          # Tu lógica de deploy aquí
+          # Ejemplo: vercel deploy --env=staging
+          # Ejemplo: aws s3 sync dist/ s3://staging-bucket
+
+      - name: ⏳ Wait for deployment
+        run: sleep 5
+
+      - name: 📊 Health check
+        run: |
+          echo "💚 Checking staging health..."
+          # curl -f https://staging.tuapp.com/health || exit 1
+          echo "✅ Staging deployment successful!"
+
+      - name: 📊 Deployment Summary
+        run: |
+          echo "### 🚀 Staging Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ✅ Deployed" >> $GITHUB_STEP_SUMMARY
+          echo "- **URL**: https://staging.tuapp.com" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Time**: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,104 @@
+---
+name: 🎯 Branch Lifetime Monitor
+
+on:
+  schedule:
+    # Ejecuta todos los días a las 9:00 AM
+    - cron: '0 9 * * *'
+  
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  check-branch-age:
+    name: 📅 Check Branch Lifetime
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 🔍 Find old branches
+        id: old_branches
+        run: |
+          echo "Checking for branches older than 2 days..."
+          
+          # Obtener fecha de hace 2 días
+          TWO_DAYS_AGO=$(date -d '2 days ago' +%s)
+          
+          OLD_BRANCHES=""
+          
+          # Iterar sobre todas las ramas remotas (excepto main)
+          for branch in $(git branch -r | grep -v 'HEAD\|main' | sed 's/origin\///'); do
+            # Obtener fecha del último commit de la rama
+            LAST_COMMIT_DATE=$(git log -1 --format=%ct origin/$branch)
+            
+            if [ $LAST_COMMIT_DATE -lt $TWO_DAYS_AGO ]; then
+              BRANCH_AGE_DAYS=$(( ($(date +%s) - $LAST_COMMIT_DATE) / 86400 ))
+              echo "⚠️ Branch $branch is $BRANCH_AGE_DAYS days old"
+              OLD_BRANCHES="${OLD_BRANCHES}- \`$branch\` (${BRANCH_AGE_DAYS} days old)\n"
+            fi
+          done
+          
+          if [ -n "$OLD_BRANCHES" ]; then
+            echo "has_old_branches=true" >> $GITHUB_OUTPUT
+            echo "branches<<EOF" >> $GITHUB_OUTPUT
+            echo -e "$OLD_BRANCHES" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "has_old_branches=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 📝 Find PRs for old branches
+        if: steps.old_branches.outputs.has_old_branches == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "### ⚠️ Old Branches Detected" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The following branches are older than 2 days:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.old_branches.outputs.branches }}" >> $GITHUB_STEP_SUMMARY
+          
+          # Buscar PRs asociados
+          gh pr list --state open --json number,headRefName,createdAt,author | \
+            jq -r '.[] | select(.headRefName | IN($ARGS.positional[])) | 
+              "@\(.author.login) - PR #\(.number) (\(.headRefName)) has been open for more than 2 days. Please merge or close it."' \
+            $(echo "${{ steps.old_branches.outputs.branches }}" | grep -oP '`\K[^`]+')
+
+      - name: 💬 Comment on old PRs
+        if: steps.old_branches.outputs.has_old_branches == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Obtener PRs abiertos
+          PRS=$(gh pr list --state open --json number,headRefName,createdAt,url)
+          
+          echo "$PRS" | jq -r '.[] | select(.headRefName | IN($ARGS.positional[])) | 
+            "\(.number)|\(.url)"' \
+            $(echo "${{ steps.old_branches.outputs.branches }}" | grep -oP '`\K[^`]+') | \
+          while IFS='|' read -r PR_NUMBER PR_URL; do
+            echo "Commenting on PR #$PR_NUMBER"
+            
+            gh pr comment $PR_NUMBER --body "⚠️ **Trunk-Based Development Alert**
+            
+            This PR has been open for more than **2 days**.
+            
+            In trunk-based development, branches should be short-lived (max 2 days) to:
+            - Reduce merge conflicts
+            - Enable continuous integration
+            - Maintain high development velocity
+            
+            **Recommended actions**:
+            1. ✅ Merge this PR if ready
+            2. 📝 Break into smaller PRs if too large
+            3. ❌ Close if no longer needed
+            
+            ---
+            💡 **Tip**: Keep PRs small and focused on a single feature/fix."
+          done
