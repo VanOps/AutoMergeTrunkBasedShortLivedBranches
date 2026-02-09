@@ -13,12 +13,6 @@ NC='\033[0m' # No Color
 echo -e "${BLUE}⚡ Trunk-Based Quick Branch Creator${NC}"
 echo ""
 
-# Verificar que estamos en un repo git
-if [ ! -d .git ]; then
-    echo -e "${RED}❌ Error: No estás en un repositorio git${NC}"
-    exit 1
-fi
-
 # Asegurarse de estar en main actualizado
 echo -e "${BLUE}📥 Actualizando main...${NC}"
 git checkout main

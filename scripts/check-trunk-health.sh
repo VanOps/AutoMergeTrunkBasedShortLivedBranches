@@ -19,12 +19,6 @@ if ! command -v gh &> /dev/null; then
     exit 1
 fi
 
-# Verificar que estamos en un repo
-if [ ! -d .git ]; then
-    echo -e "${RED}❌ Error: No estás en un repositorio git${NC}"
-    exit 1
-fi
-
 echo -e "${GREEN}📊 Trunk (main) Health Report${NC}"
 echo ""
 

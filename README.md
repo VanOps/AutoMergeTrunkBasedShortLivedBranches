@@ -19,6 +19,7 @@ Estrategia de desarrollo con un trunk único (main) siempre deployable, donde la
 │       ├── trunk-ci.yml               # CI/CD principal
 │       └── branch-lifetime-monitor.yml # Monitor de ramas viejas
 ├── scripts/
+│   ├── check_repo_config.sh           # Verificar configuración del repo
 │   ├── create-quick-branch.sh         # Crear rama con recordatorio
 │   └── check-trunk-health.sh          # Verificar salud del trunk
 ├── src/
@@ -240,6 +241,9 @@ Si una rama tiene > 2 días:
 ## 🔍 Comandos Útiles
 
 ```bash
+# Verificar configuración del repositorio
+./scripts/check_repo_config.sh
+
 # Crear rama rápida con recordatorio
 ./scripts/create-quick-branch.sh
 
