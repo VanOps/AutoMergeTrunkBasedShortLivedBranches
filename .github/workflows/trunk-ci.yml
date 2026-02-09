@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  NODE_VERSION: '20'
+  NODE_VERSION: "20"
 
 jobs:
   # ============================================
@@ -25,11 +25,11 @@ jobs:
     name: 🔍 Lint
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    
+
     defaults:
       run:
         working-directory: ./src/app
-    
+
     steps:
       - name: 📥 Checkout
         uses: actions/checkout@v4
@@ -40,11 +40,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: './src/app/package-lock.json'
 
       - name: 📦 Install dependencies
-        run: npm ci --prefer-offline
+        run: npm install --prefer-offline
 
       - name: 🔍 Run ESLint
         run: npm run lint
@@ -61,11 +59,11 @@ jobs:
     name: 🧪 Test
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    
+
     defaults:
       run:
         working-directory: ./src/app
-    
+
     steps:
       - name: 📥 Checkout
         uses: actions/checkout@v4
@@ -74,11 +72,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: './src/app/package-lock.json'
 
       - name: 📦 Install dependencies
-        run: npm ci --prefer-offline
+        run: npm install --prefer-offline
 
       - name: 🏗️ Build Next.js
         run: npm run build
@@ -97,11 +93,11 @@ jobs:
     name: 🔒 Security
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    
+
     defaults:
       run:
         working-directory: ./src/app
-    
+
     steps:
       - name: 📥 Checkout
         uses: actions/checkout@v4
@@ -110,11 +106,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: './src/app/package-lock.json'
 
       - name: 📦 Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: 🔒 Run npm audit
         run: npm audit --audit-level=moderate
@@ -135,11 +129,11 @@ jobs:
     if: |
       github.event_name == 'pull_request' &&
       !github.event.pull_request.draft
-    
+
     permissions:
       contents: write
       pull-requests: write
-    
+
     steps:
       - name: 📊 Check PR info
         env:
@@ -174,11 +168,11 @@ jobs:
     if: |
       github.ref == 'refs/heads/main' &&
       github.event_name == 'push'
-    
-    environment: 
+
+    environment:
       name: staging
       url: https://staging.tuapp.com
-    
+
     steps:
       - name: 📥 Checkout
         uses: actions/checkout@v4
